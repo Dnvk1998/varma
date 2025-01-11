@@ -1,0 +1,64 @@
+he equivalent in the Reactive stack for @RequestMapping and other related annotations like @GetMapping, @PostMapping, etc., involves the use of @RequestMapping and its HTTP method-specific variants within Spring WebFlux (a reactive framework in Spring). Here's how it maps:
+
+1. @RequestMapping in Spring MVC vs. Spring WebFlux
+In Spring WebFlux, @RequestMapping can be used similarly to Spring MVC to map HTTP requests to controller methods.
+Spring WebFlux focuses on asynchronous handling and uses reactive programming principles, unlike the traditional Servlet-based MVC framework.
+2. Reactive HTTP Methods
+Spring WebFlux also provides shortcut annotations such as @GetMapping, @PostMapping, etc., just like Spring MVC, to map methods to specific HTTP methods.
+Example:
+
+java
+Copy code
+@RestController
+@RequestMapping("/persons")
+public class PersonController {
+
+    @GetMapping("/{id}")
+    public Mono<Person> getPerson(@PathVariable Long id) {
+        // Returning Mono<Person> for asynchronous response
+        return personService.getPersonById(id);
+    }
+
+    @PostMapping
+    public Mono<Void> add(@RequestBody Person person) {
+        return personService.addPerson(person);
+    }
+}
+In the example above, Mono<T> is used for reactive types, which represents a single value that may be available now or in the future (asynchronously).
+3. Path Pattern Matching in WebFlux
+Similar to Spring MVC, Spring WebFlux uses PathPattern (for URL matching) instead of the older AntPathMatcher. This ensures efficient matching of URL paths with encoding and parameter handling.
+WebFlux supports using PathPattern in @RequestMapping and method-specific annotations, providing more efficient path handling.
+4. Consumes and Produces in WebFlux
+In the reactive context, @RequestMapping can still be used with the consumes and produces attributes to define content types that the controller method can handle.
+Example:
+
+java
+Copy code
+@PostMapping(path = "/pets", consumes = "application/json")
+public Mono<Void> addPet(@RequestBody Pet pet) {
+    return petService.addPet(pet);
+}
+Just like in Spring MVC, you can narrow down request mappings based on content types (consumes and produces).
+5. Reactive Controllers Return Types
+In Spring WebFlux, the return types of controller methods are usually reactive types like Mono<T> or Flux<T> instead of regular return types.
+Mono represents a single value, and Flux represents multiple values (reactive streams).
+6. Custom Annotations and Request Mapping Conditions
+Spring WebFlux supports the use of composed annotations, such as @GetMapping, @PostMapping, and others, to specify mappings for different HTTP methods.
+Custom logic and advanced mapping configurations can also be implemented for more complex use cases in WebFlux.
+7. Handling HTTP Methods (GET, POST, etc.)
+The HTTP methods like GET, POST, PUT, DELETE, PATCH, etc., can be mapped using specific annotations like @GetMapping, @PostMapping, and so on.
+Example:
+
+java
+Copy code
+@GetMapping("/pets/{petId}")
+public Mono<Pet> findPet(@PathVariable String petId) {
+    return petService.findPet(petId);
+}
+8. Using Path Variables with WebFlux
+You can still use path variables in WebFlux with the @PathVariable annotation, just like in Spring MVC.
+9. Programmatic Registration of Handlers
+In Spring WebFlux, it's also possible to programmatically register handler methods for dynamic use cases.
+10. @HttpExchange in WebFlux
+While @HttpExchange is a concept used in Spring Cloud to handle HTTP client and server proxy generation, in WebFlux, it's more about handling reactive streams of data for controller methods.
+In summary, Spring WebFlux offers a similar mechanism for request mapping as Spring MVC but focuses on asynchronous, reactive types (like Mono and Flux). The annotations like @RequestMapping, @GetMapping, @PostMapping, etc., still work, but they are integrated into a more scalable, non-blocking architecture suited for high concurrency and event-driven applications.
