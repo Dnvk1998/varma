@@ -1,0 +1,178 @@
+<dependencies>
+    <!-- Spring Web Dependency for REST communication -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+</dependencies>
+package com.midas.core.service;
+
+import com.midas.core.model.Incentive;
+import com.midas.core.model.Transaction;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+@Service
+public class IncentiveService {
+
+    private final RestTemplate restTemplate;
+
+    @Autowired
+    public IncentiveService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    public Incentive getIncentive(Transaction transaction) {
+        // URL of the Incentive API
+        String url = "http://localhost:8080/incentive";
+
+        // Send POST request to the Incentive API with the transaction as the payload
+        return restTemplate.postForObject(url, transaction, Incentive.class);
+    }
+}
+package com.midas.core.model;
+
+public class Incentive {
+
+    private double amount;
+
+    // Getters and setters
+    public double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(double amount) {
+        this.amount = amount;
+    }
+}
+package com.midas.core.listener;
+
+import com.midas.core.model.Incentive;
+import com.midas.core.model.TransactionRecord;
+import com.midas.core.model.User;
+import com.midas.core.repository.TransactionRecordRepository;
+import com.midas.core.repository.UserRepository;
+import com.midas.core.service.IncentiveService;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class TransactionKafkaListener {
+
+    @Value("${kafka.topic}")
+    private String topic;  // Topic name from application.yml
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private TransactionRecordRepository transactionRecordRepository;
+
+    @Autowired
+    private IncentiveService incentiveService;
+
+    // Listen to the Kafka topic and deserialize the incoming messages
+    @KafkaListener(topics = "${kafka.topic}", groupId = "transaction-group")
+    public void listenToTransactions(ConsumerRecord<String, TransactionRecord> record) {
+        TransactionRecord transaction = record.value();
+
+        // Check if sender and recipient are valid
+        User sender = userRepository.findById(transaction.getSender().getId()).orElse(null);
+        User recipient = userRepository.findById(transaction.getRecipient().getId()).orElse(null);
+
+        if (sender == null || recipient == null || sender.getBalance() < transaction.getAmount()) {
+            // Invalid transaction, discard it
+            System.out.println("Transaction invalid, discarding: " + transaction);
+            return;
+        }
+
+        // Call Incentive API to get the incentive amount
+        Incentive incentive = incentiveService.getIncentive(transaction);
+
+        // Update sender and recipient balances
+        sender.setBalance(sender.getBalance() - transaction.getAmount());
+        recipient.setBalance(recipient.getBalance() + transaction.getAmount() + incentive.getAmount());
+
+        userRepository.save(sender);
+        userRepository.save(recipient);
+
+        // Save the transaction record with the incentive
+        transactionRecordRepository.save(transaction);
+
+        // Log successful transaction
+        System.out.println("Transaction successful with incentive: " + incentive.getAmount());
+    }
+}
+package com.midas.core.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+package com.midas.core.listener;
+
+import com.midas.core.model.TransactionRecord;
+import com.midas.core.model.User;
+import com.midas.core.repository.TransactionRecordRepository;
+import com.midas.core.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.junit.jupiter.api.Test;
+
+@SpringBootTest
+@EmbeddedKafka(partitions = 1, topics = "transactions")
+public class TaskFourTests {
+
+    @Autowired
+    private KafkaTemplate<String, TransactionRecord> kafkaTemplate;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private TransactionRecordRepository transactionRecordRepository;
+
+    @Test
+    public void testTransactionProcessing() {
+        // Create and save users
+        User sender = new User();
+        sender.setId("wilbur");
+        sender.setBalance(1000);  // Example balance
+
+        User recipient = new User();
+        recipient.setId("statler");
+        recipient.setBalance(500);
+
+        userRepository.save(sender);
+        userRepository.save(recipient);
+
+        // Send 4 transactions
+        for (int i = 0; i < 4; i++) {
+            TransactionRecord transaction = new TransactionRecord();
+            transaction.setTransactionId("txn" + i);
+            transaction.setSender(sender);
+            transaction.setRecipient(recipient);
+            transaction.setAmount(100 + i * 50);  // Example amounts: 100, 150, 200, 250
+
+            kafkaTemplate.send("transactions", transaction);
+        }
+
+        // Retrieve and check the balance of "wilbur" user
+        User wilbur = userRepository.findById("wilbur").orElse(null);
+        System.out.println("Final balance of wilbur: " + wilbur.getBalance());
+    }
+}
