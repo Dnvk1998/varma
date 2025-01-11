@@ -1,0 +1,103 @@
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.kafka</groupId>
+        <artifactId>spring-kafka</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>2.8.0</version> <!-- Make sure to match your version -->
+    </dependency>
+</dependencies>
+kafka:
+  topic: "transactions"  # Replace with the actual topic name
+package com.midas.core.listener;
+
+import com.midas.core.model.Transaction;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class TransactionKafkaListener {
+
+    @Value("${kafka.topic}")
+    private String topic;  // Topic name from application.yml
+
+    // Listen to the Kafka topic and deserialize the incoming messages
+    @KafkaListener(topics = "${kafka.topic}", groupId = "transaction-group")
+    public void listenToTransactions(ConsumerRecord<String, Transaction> record) {
+        // Deserialize the incoming message into a Transaction object
+        Transaction transaction = record.value();
+        
+        // Log the transaction details (for now, you can just print them out)
+        System.out.println("Received transaction: " + transaction);
+        
+        // You can access the amount attached to the transaction later for the tests
+        // Example: System.out.println(transaction.getAmount());
+    }
+}
+package com.midas.core.model;
+
+public class Transaction {
+    private String id;
+    private double amount;
+
+    // Getters and setters
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(double amount) {
+        this.amount = amount;
+    }
+
+    @Override
+    public String toString() {
+        return "Transaction{id='" + id + "', amount=" + amount + "}";
+    }
+}
+package com.midas.core.listener;
+
+import com.midas.core.model.Transaction;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.junit.jupiter.api.Test;
+
+@SpringBootTest
+@EmbeddedKafka(partitions = 1, topics = "transactions")
+public class TaskTwoTests {
+
+    @Autowired
+    private KafkaTemplate<String, Transaction> kafkaTemplate;
+
+    @Test
+    public void testReceiveTransactions() {
+        // Sending 4 test transactions to the Kafka topic
+        for (int i = 0; i < 4; i++) {
+            Transaction transaction = new Transaction();
+            transaction.setId("txn" + i);
+            transaction.setAmount(100 + i * 50);  // Example amounts: 100, 150, 200, 250
+            kafkaTemplate.send("transactions", transaction);
+        }
+        
+        // Use your debugger to inspect the incoming transactions in your listener
+        // Record the amount attached to the first four transactions received
+    }
+}
+Transaction 1: 100
+Transaction 2: 150
+Transaction 3: 200
+Transaction 4: 250
